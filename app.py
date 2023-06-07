@@ -32,7 +32,23 @@ def sign_up():
 
             print(f"pass: #{password}")
             print(status.acknowledged)
-            return dumps({'message' : password})
+            return dumps({'message' : "success"})
     except Exception as e:
         print(e)
         return dumps({'message': 'error'})
+
+
+@app.route("/login", methods=["POST"])
+def login(): 
+    try: 
+        data = json.loads(request.data)
+        user = db.Accounts.find_one({"name": data['username']})
+        print(user)
+        if not check_password_hash(user["password"], data["password"]): 
+            return dumps({"message": "User not found."})
+    
+        return dumps({"message": "success"})
+
+    except Exception as e: 
+        print(e)
+        return dumps({f'message: {e}'})
