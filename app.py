@@ -47,6 +47,13 @@ def login():
         if not check_password_hash(user["password"], data["password"]): 
             return dumps({"message": "User not found."})
     
+        session_id = generate_password_hash("secretPassword101")
+        status = db.Sessions.insert_one({ 
+            "user": user["name"], 
+            "session_id": session_id
+        })
+
+        print(status.acknowledged)
         return dumps({"message": "success"})
 
     except Exception as e: 
