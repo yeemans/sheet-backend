@@ -24,7 +24,7 @@ def sign_up():
         password = data['password']
 
         if user_name and password:
-            
+
             status = db.Accounts.insert_one({
                 "name": user_name,
                 "password": generate_password_hash(password)
@@ -54,8 +54,23 @@ def login():
         })
 
         print(status.acknowledged)
-        return dumps({"message": "success"})
+        print(session_id)
+        return dumps({"message": "success", "session": session_id})
 
     except Exception as e: 
         print(e)
-        return dumps({f'message: {e}'})
+        return dumps({'message': {e}})
+
+@app.route("/is-logged-in", methods=["POST"])
+def is_logged_in(): 
+    try:
+        data = json.loads(request.data)
+        session = db.Sessions.find_one({"session_id": data["sessionId"]})
+
+        if session: 
+            return dumps({"message": "success", "user": session["user"]})
+        return dumps({"message": "User is not logged in."})
+    
+    except Exception as e: 
+        print(e)
+        return dumps({'message': {e}})
