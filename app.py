@@ -5,6 +5,8 @@ from pymongo import MongoClient
 from bson.json_util import dumps
 import json
 from werkzeug.security import generate_password_hash, check_password_hash
+from PIL import Image
+import io
 
 client = MongoClient('mongodb://localhost:27017/')
 db = client.local
@@ -74,3 +76,25 @@ def is_logged_in():
     except Exception as e: 
         print(e)
         return dumps({'message': {e}})
+    
+@app.route("/upload-sheet", methods=["POST"])
+def upload_sheet(): 
+    try:
+        print(request.files["sheet"])
+        im = Image.open(request.files["sheet"])
+
+        image_bytes = io.BytesIO()
+        im.save(image_bytes, format='JPEG')
+
+        image = {
+            'sheet': image_bytes.getvalue()
+        }
+
+        status = db.Sheets.insert_one(image)
+        print(status.acknowledged)
+       
+
+        return dumps({"message": "success", "sheet": image})
+    except Exception as e: 
+        print(e)
+        return dumps({"message": e})
