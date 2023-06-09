@@ -7,12 +7,24 @@ import json
 from werkzeug.security import generate_password_hash, check_password_hash
 from PIL import Image
 import io
+from os import environ
+import boto3, botocore
 
 client = MongoClient('mongodb://localhost:27017/')
 db = client.local
 
 app = Flask(__name__)
 CORS(app)
+app.config['S3_BUCKET'] = environ.get("S3_BUCKET")
+app.config['S3_KEY'] = environ.get("S3_KEY")
+app.config['S3_SECRET'] = environ.get("S3_SECRET")
+app.config['S3_LOCATION'] = 'http://{}.s3.amazonaws.com/'.format(environ.get("S3_BUCKET"))
+
+s3 = boto3.client(
+   "s3",
+   aws_access_key_id=app.config['S3_KEY'],
+   aws_secret_access_key=app.config['S3_SECRET']
+)
 
 @app.route("/", methods=['GET'])
 def home():
@@ -81,20 +93,32 @@ def is_logged_in():
 def upload_sheet(): 
     try:
         print(request.files["sheet"])
-        im = Image.open(request.files["sheet"])
+        sheet = request.files["sheet"]
+        if not sheet: return dumps({"message": "empty file"})
 
-        image_bytes = io.BytesIO()
-        im.save(image_bytes, format='JPEG')
 
-        image = {
-            'sheet': image_bytes.getvalue()
-        }
-
-        status = db.Sheets.insert_one(image)
+        file_url = upload_file_to_s3(sheet, app.config["S3_BUCKET"])
+        status = db.Sheets.insert_one({"sheet": file_url})
         print(status.acknowledged)
        
 
-        return dumps({"message": "success", "sheet": image})
+        return dumps({"message": "success", "sheet": file_url})
     except Exception as e: 
         print(e)
         return dumps({"message": e})
+
+def upload_file_to_s3(file, bucket_name, acl="public-read"):
+    try:
+        s3.upload_fileobj(
+            file,
+            bucket_name,
+            file.filename,
+            ExtraArgs={
+                "ACL": acl,
+                "ContentType": file.content_type    #Set appropriate content type as per the file
+            }
+        )
+    except Exception as e:
+        print("Something Happened: ", e)
+        return e
+    return "{}{}".format(app.config["S3_LOCATION"], file.filename)
