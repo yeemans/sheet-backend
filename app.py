@@ -9,6 +9,7 @@ from PIL import Image
 import io
 from os import environ
 import boto3
+from bson.objectid import ObjectId
 
 client = MongoClient('mongodb://localhost:27017/')
 db = client.local
@@ -107,12 +108,23 @@ def upload_sheet():
                                           "composer": data["composer"], "instrument": data["instrument"],
                                           "bpm": data["bpm"]})
             
-            print("DID IT WORK: " + str(status.acknowledged))
             return dumps({"message": "success", "data": None})
     except Exception as e: 
         print(e)
         return dumps({"message": e})
 
+@app.route("/get-sheet", methods=["POST"])
+def get_sheet(): 
+    try: 
+        data = json.loads(request.data)
+        print(data)
+        status = db.Sheets.find_one({"_id": ObjectId(data["sheetId"])})
+        print(status)
+        return dumps({"message": "success", "sheet": status})
+
+    except Exception as e:
+        print(e)
+        return dumps({"message": e})
 
 def upload_file_to_s3(file, bucket_name, acl="public-read"):
     try:
