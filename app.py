@@ -8,7 +8,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from PIL import Image
 import io
 from os import environ
-import boto3, botocore
+import boto3
 
 client = MongoClient('mongodb://localhost:27017/')
 db = client.local
@@ -57,9 +57,11 @@ def login():
     try: 
         data = json.loads(request.data)
         user = db.Accounts.find_one({"name": data['username']})
-        print(user)
+        if not user: 
+            return dumps({"message": "Account not found."})
+        
         if not check_password_hash(user["password"], data["password"]): 
-            return dumps({"message": "User not found."})
+            return dumps({"message": "Account not found."})
     
         session_id = generate_password_hash("secretPassword101")
         status = db.Sessions.insert_one({ 
@@ -67,9 +69,8 @@ def login():
             "session_id": session_id
         })
 
-        print(status.acknowledged)
-        print(session_id)
         return dumps({"message": "success", "session": session_id})
+
 
     except Exception as e: 
         print(e)
@@ -82,7 +83,9 @@ def is_logged_in():
         session = db.Sessions.find_one({"session_id": data["sessionId"]})
 
         if session: 
-            return dumps({"message": "success", "user": session["user"]})
+            user = db.Accounts.find_one({"name": session["user"]})
+            userId = user["_id"]
+            return dumps({"message": "success", "user": user["name"], "userId": userId})
         return dumps({"message": "User is not logged in."})
     
     except Exception as e: 
@@ -92,20 +95,24 @@ def is_logged_in():
 @app.route("/upload-sheet", methods=["POST"])
 def upload_sheet(): 
     try:
-        print(request.files["sheet"])
-        sheet = request.files["sheet"]
-        if not sheet: return dumps({"message": "empty file"})
-
-
-        file_url = upload_file_to_s3(sheet, app.config["S3_BUCKET"])
-        status = db.Sheets.insert_one({"sheet": file_url})
-        print(status.acknowledged)
-       
-
-        return dumps({"message": "success", "sheet": file_url})
+        print(request.files)
+        if "sheet" in request.files:
+            file_url = upload_file_to_s3(request.files["sheet"], app.config["S3_BUCKET"])
+            return dumps({"message": "success", "s3_url": file_url})
+        else: 
+            # handle json containing details about sheet such as composer and bpm 
+            data = json.loads(request.data)
+            print(data)
+            status = db.Sheets.insert_one({"sheet": data["sheet"], "user_id": data["userId"],
+                                          "composer": data["composer"], "instrument": data["instrument"],
+                                          "bpm": data["bpm"]})
+            
+            print("DID IT WORK: " + str(status.acknowledged))
+            return dumps({"message": "success", "data": None})
     except Exception as e: 
         print(e)
         return dumps({"message": e})
+
 
 def upload_file_to_s3(file, bucket_name, acl="public-read"):
     try:
